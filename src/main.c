@@ -24,7 +24,7 @@
 
 #include "secrets.h"
 
-static const char *TAG = "HyppoRemote";
+static const char *TAG = "HassRemote";
 
 static EventGroupHandle_t wifi_event_group;
 const static int CONNECTED_BIT = BIT0;
@@ -47,7 +47,13 @@ static void IRAM_ATTR gpio_isr_handler(void* arg) {
     xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
 }
 
-void triggerAutomationHypploClock() {
+void triggerAutomation(char *automation) {
+    char buffer[255];
+    memcpy(buffer, "{\"entity_id\": \"automation.", 26);
+    // TODO - Check max buffer size
+    memcpy(buffer + 26, automation, strlen(automation));
+    memcpy(buffer + 26 + strlen(automation), "\"}", 2);
+
     esp_http_client_config_t config = {
         .url = HTTP_URL,
         .event_handler = _http_event_handle,
@@ -56,7 +62,7 @@ void triggerAutomationHypploClock() {
     esp_http_client_handle_t client = esp_http_client_init(&config);
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_header(client, "Authorization", HTTP_TOKEN);
-    esp_http_client_set_post_field(client, "{\"entity_id\": \"automation.hyppoclock_on\"}", 41);
+    esp_http_client_set_post_field(client, buffer, 28 + strlen(automation));
     esp_err_t err = esp_http_client_perform(client);
 
     if (err == ESP_OK) {
@@ -77,7 +83,7 @@ static void gpio_task_example(void* arg) {
                 // TODO - Better debouncing
                 vTaskDelay(1000 / portTICK_PERIOD_MS);
                 if (gpio_get_level(io_num)) {
-                    triggerAutomationHypploClock();
+                    triggerAutomation("hyppoclock_on");
                 }
             }
         }
