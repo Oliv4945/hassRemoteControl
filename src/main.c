@@ -74,9 +74,12 @@ static void gpio_task_example(void* arg) {
             printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
 
             if (io_num == GPIO_INPUT_ON) {
-                triggerAutomationHypploClock();
+                // TODO - Better debouncing
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
+                if (gpio_get_level(io_num)) {
+                    triggerAutomationHypploClock();
+                }
             }
-           
         }
     }
 }
