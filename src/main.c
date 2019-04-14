@@ -31,6 +31,29 @@ const static int CONNECTED_BIT = BIT0;
 const static int MQTT_BIT = BIT1;
 
 
+// GPIO related
+#define GPIO_INPUT_ON     5
+#define GPIO_INPUT_PIN_SEL (1ULL<<GPIO_INPUT_ON)
+#define ESP_INTR_FLAG_DEFAULT 0
+static xQueueHandle gpio_evt_queue = NULL;
+
+
+static void IRAM_ATTR gpio_isr_handler(void* arg) {
+    uint32_t gpio_num = (uint32_t) arg;
+    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+}
+
+static void gpio_task_example(void* arg) {
+    uint32_t io_num;
+    for(;;) {
+        if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
+            printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
+        }
+    }
+}
+
+
+
 /*
 static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 {
@@ -177,6 +200,33 @@ esp_err_t _http_event_handle(esp_http_client_event_t *evt) {
 }
 
 
+void gpio_init() {
+    gpio_config_t io_conf;
+    // enable pull-down mode
+    io_conf.pull_down_en = 1;
+    //disable pull-up mode
+    io_conf.pull_up_en = 0;
+    //set as input mode    
+    io_conf.mode = GPIO_MODE_INPUT;
+    //interrupt of rising edge
+    io_conf.intr_type = GPIO_PIN_INTR_POSEDGE;
+    //bit mask of the pins, use GPIO5
+    io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL;
+    //configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    //create a queue to handle gpio event from isr
+    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+    //start gpio task
+    xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL);
+
+    //install gpio isr service
+    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
+    //hook isr handler for specific gpio pin
+    gpio_isr_handler_add(GPIO_INPUT_ON, gpio_isr_handler, (void*) GPIO_INPUT_ON);
+}
+
+
 void app_main()
 {
     ESP_LOGI(TAG, "[APP] Startup..");
@@ -192,6 +242,7 @@ void app_main()
 
     nvs_flash_init();
     wifi_init();
+    gpio_init();
     // mqtt_app_start();
 
 
