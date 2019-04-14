@@ -38,9 +38,33 @@ const static int MQTT_BIT = BIT1;
 static xQueueHandle gpio_evt_queue = NULL;
 
 
+// Declarations
+esp_err_t _http_event_handle(esp_http_client_event_t *evt);
+
+
 static void IRAM_ATTR gpio_isr_handler(void* arg) {
     uint32_t gpio_num = (uint32_t) arg;
     xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+}
+
+void triggerAutomationHypploClock() {
+    esp_http_client_config_t config = {
+        .url = HTTP_URL,
+        .event_handler = _http_event_handle,
+        .method = HTTP_METHOD_POST,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "Authorization", HTTP_TOKEN);
+    esp_http_client_set_post_field(client, "{\"entity_id\": \"automation.hyppoclock_on\"}", 41);
+    esp_err_t err = esp_http_client_perform(client);
+
+    if (err == ESP_OK) {
+    ESP_LOGI(TAG, "Status = %d, content_length = %d",
+            esp_http_client_get_status_code(client),
+            esp_http_client_get_content_length(client));
+    }
+    esp_http_client_cleanup(client);
 }
 
 static void gpio_task_example(void* arg) {
@@ -48,6 +72,11 @@ static void gpio_task_example(void* arg) {
     for(;;) {
         if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
             printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
+
+            if (io_num == GPIO_INPUT_ON) {
+                triggerAutomationHypploClock();
+            }
+           
         }
     }
 }
@@ -218,7 +247,7 @@ void gpio_init() {
     //create a queue to handle gpio event from isr
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
     //start gpio task
-    xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL);
+    xTaskCreate(gpio_task_example, "gpio_task_example", 4096, NULL, 10, NULL);
 
     //install gpio isr service
     gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
@@ -244,24 +273,5 @@ void app_main()
     wifi_init();
     gpio_init();
     // mqtt_app_start();
-
-
-    esp_http_client_config_t config = {
-        .url = HTTP_URL,
-        .event_handler = _http_event_handle,
-        .method = HTTP_METHOD_POST,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_header(client, "Authorization", HTTP_TOKEN);
-    esp_http_client_set_post_field(client, "{\"entity_id\": \"automation.hyppoclock_on\"}", 41);
-    esp_err_t err = esp_http_client_perform(client);
-
-    if (err == ESP_OK) {
-    ESP_LOGI(TAG, "Status = %d, content_length = %d",
-            esp_http_client_get_status_code(client),
-            esp_http_client_get_content_length(client));
-    }
-    esp_http_client_cleanup(client);
 
 }
