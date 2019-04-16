@@ -21,6 +21,7 @@
 
 #include "esp_http_client.h"
 #include "driver/gpio.h"
+#include "rtc_io.h"
 
 #include "secrets.h"
 
@@ -36,6 +37,8 @@ const static int MQTT_BIT = BIT1;
 #define GPIO_INPUT_PIN_SEL (1ULL<<GPIO_INPUT_ON)
 #define ESP_INTR_FLAG_DEFAULT 0
 static xQueueHandle gpio_evt_queue = NULL;
+
+#define GPIO_WAKE_UP 4
 
 
 // Declarations
@@ -265,6 +268,46 @@ void gpio_init() {
 }
 
 
+void print_wakeup_reason() {
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+  switch(wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_EXT0:
+        ESP_LOGI("WAKEUP", "Ext0 - RTC_IO");
+        break;
+    case ESP_SLEEP_WAKEUP_EXT1:
+        ESP_LOGI("WAKEUP", "Ext1 - RTC_CNTL");
+        break;
+    case ESP_SLEEP_WAKEUP_TIMER:
+        ESP_LOGI("WAKEUP", "Timer");
+        break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD:
+        ESP_LOGI("WAKEUP", "Touchpad");
+        break;
+    case ESP_SLEEP_WAKEUP_ULP:
+        ESP_LOGI("WAKEUP", "ULP");
+        break;
+    /*
+    case ESP_SLEEP_WAKEUP_GPIO:
+        ESP_LOGI("WAKEUP", "Lightleep - GPIO");
+        break;
+    case ESP_SLEEP_WAKEUP_UART:
+        ESP_LOGI("WAKEUP", "Lightleep - GPIO");
+        break;
+    case ESP_SLEEP_WAKEUP_ALL:
+        ESP_LOGI("WAKEUP", "Lightleep - GPIO");
+        break;
+    */
+    case ESP_SLEEP_WAKEUP_UNDEFINED:
+        ESP_LOGI("WAKEUP", "Reset was not caused by exit from deep sleep");
+        break;
+    default:
+        ESP_LOGI("WAKEUP", "Unknown, check latest doc");
+        break;
+  }
+}
+
+
 void app_main()
 {
     ESP_LOGI(TAG, "[APP] Startup..");
@@ -282,5 +325,21 @@ void app_main()
     wifi_init();
     gpio_init();
     // mqtt_app_start();
+
+    print_wakeup_reason();
+
+    // Deep sleep time
+    if (rtc_gpio_pulldown_en(GPIO_WAKE_UP) != ESP_OK) {
+        ESP_LOGE(TAG, "Can not set GPIO_WAKE_UP");
+    };
+    esp_sleep_enable_ext0_wakeup(GPIO_WAKE_UP, 1);
+
+    for (uint8_t i = 20; i>0; i--) {
+        ESP_LOGI(TAG, "%d", i);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+    ESP_LOGI(TAG, "Going into deep sleep");
+    esp_deep_sleep_start();
+
 
 }
