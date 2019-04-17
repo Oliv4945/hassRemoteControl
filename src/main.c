@@ -21,7 +21,7 @@
 
 #include "esp_http_client.h"
 #include "driver/gpio.h"
-#include "rtc_io.h"
+#include "driver/rtc_io.h"
 
 #include "secrets.h"
 
