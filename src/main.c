@@ -22,6 +22,7 @@
 #include "esp_http_client.h"
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
+#include "driver/adc.h"
 
 #include "secrets.h"
 
@@ -333,6 +334,16 @@ void app_main()
         ESP_LOGE(TAG, "Can not set GPIO_WAKE_UP");
     };
     esp_sleep_enable_ext0_wakeup(GPIO_WAKE_UP, 1);
+    //const uint8_t ext1_wakeup_pin = 4;
+    //const uint64_t ext1_wakeup_mask = 1ULL << ext1_wakeup_pin;
+    // esp_sleep_enable_ext1_wakeup(ext1_wakeup_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+
+
+    // Disable peripherals
+    if (esp_wifi_stop() != ESP_OK) {
+        ESP_LOGE(TAG, "Can stop Wi-Fi");
+    };
+    adc_power_off();
 
     for (uint8_t i = 20; i>0; i--) {
         ESP_LOGI(TAG, "%d", i);
