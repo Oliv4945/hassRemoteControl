@@ -30,7 +30,6 @@ static const char *TAG = "HassRemote";
 
 static EventGroupHandle_t wifi_event_group;
 const static int CONNECTED_BIT = BIT0;
-const static int MQTT_BIT = BIT1;
 
 
 // GPIO related
@@ -95,57 +94,6 @@ static void gpio_task_example(void* arg) {
 }
 
 
-
-/*
-static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
-{
-    esp_mqtt_client_handle_t client = event->client;
-    int msg_id;
-    // your_context_t *context = event->context;
-    switch (event->event_id) {
-        case MQTT_EVENT_CONNECTED:
-            ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            xEventGroupSetBits(wifi_event_group, MQTT_BIT);
-            
-            msg_id = esp_mqtt_client_subscribe(client, "/topic/qos0", 0);
-            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_subscribe(client, "/topic/qos1", 1);
-            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
-            ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
-            
-            break;
-        case MQTT_EVENT_DISCONNECTED:
-            ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
-            xEventGroupClearBits(wifi_event_group, MQTT_BIT);
-            break;
-
-        case MQTT_EVENT_SUBSCRIBED:
-            ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-            msg_id = esp_mqtt_client_publish(client, "/topic/qos0", "data", 0, 0, 0);
-            ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
-            break;
-        case MQTT_EVENT_UNSUBSCRIBED:
-            ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
-            break;
-        case MQTT_EVENT_PUBLISHED:
-            ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
-            break;
-        case MQTT_EVENT_DATA:
-            ESP_LOGI(TAG, "MQTT_EVENT_DATA");
-            printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-            printf("DATA=%.*s\r\n", event->data_len, event->data);
-            break;
-        case MQTT_EVENT_ERROR:
-            ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
-            break;
-    }
-    return ESP_OK;
-}
-*/
-
 static esp_err_t wifi_event_handler(void *ctx, system_event_t *event)
 {
     switch (event->event_id) {
@@ -188,26 +136,6 @@ static void wifi_init(void)
     xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
 }
 
-/*
-static void mqtt_app_start(void)
-{
-    const esp_mqtt_client_config_t mqtt_cfg = {
-        .uri = "mqtt://192.168.1.17",
-        .event_handle = mqtt_event_handler,
-        .username = MQTT_USER,
-        .password = MQTT_PASSWORD,
-        // .user_context = (void *)your_context
-    };
-
-    esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
-    esp_mqtt_client_start(client);
-
-    xEventGroupWaitBits(wifi_event_group, MQTT_BIT, false, true, portMAX_DELAY);
-    int msg_id = esp_mqtt_client_publish(client, "/topic/test", "data", 0, 0, 0);
-    ESP_LOGI(TAG, "sent publish successful test, msg_id=%d", msg_id);
-
-}
-*/
 
 esp_err_t _http_event_handle(esp_http_client_event_t *evt) {
     switch(evt->event_id) {
@@ -308,28 +236,30 @@ void print_wakeup_reason() {
   }
 }
 
-
-void app_main()
-{
-    ESP_LOGI(TAG, "[APP] Startup..");
-    ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
-    ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
+void init_logs() {
+    ESP_LOGI("APP", "Startup..");
+    ESP_LOGI("APP", "Free memory: %d bytes", esp_get_free_heap_size());
+    ESP_LOGI("APP", "IDF version: %s", esp_get_idf_version());
+    print_wakeup_reason();
 
     esp_log_level_set("*", ESP_LOG_INFO);
-    esp_log_level_set("MQTT_CLIENT", ESP_LOG_VERBOSE);
     esp_log_level_set("TRANSPORT_TCP", ESP_LOG_VERBOSE);
     esp_log_level_set("TRANSPORT_SSL", ESP_LOG_VERBOSE);
     esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
     esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
+}
 
+
+void app_main()
+{
+    init_logs();
     nvs_flash_init();
     wifi_init();
     gpio_init();
-    // mqtt_app_start();
+    ESP_LOGI(TAG, "========\nESP initialised\n========");
+    
 
-    print_wakeup_reason();
-
-    // Deep sleep time
+    // Deep sleep setup
     if (rtc_gpio_pulldown_en(GPIO_WAKE_UP) != ESP_OK) {
         ESP_LOGE(TAG, "Can not set GPIO_WAKE_UP");
     };
@@ -343,11 +273,16 @@ void app_main()
     if (esp_wifi_stop() != ESP_OK) {
         ESP_LOGE(TAG, "Can stop Wi-Fi");
     };
-    adc_power_off();
+    adc_power_off();    // Link to ESP-IDF bug if Wi-Fi has been activated
 
-    for (uint8_t i = 20; i>0; i--) {
-        ESP_LOGI(TAG, "%d", i);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+
+    if (wakeup_reason != ESP_SLEEP_WAKEUP_EXT0) {
+        // Skip delay if wake up from ext0
+        for (uint8_t i = 5; i>0; i--) {
+            ESP_LOGI(TAG, "%d", i);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
     }
     ESP_LOGI(TAG, "Going into deep sleep");
     esp_deep_sleep_start();
