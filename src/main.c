@@ -34,9 +34,15 @@ const static int CONNECTED_BIT = BIT0;
 #define GPIO_WAKE_UP 4
 
 // Declarations
-esp_err_t _http_event_handle(esp_http_client_event_t *evt);
+static esp_err_t _http_event_handle(esp_http_client_event_t *evt);
+static void triggerAutomation(char *automation);
+static esp_err_t wifi_event_handler(void *ctx, system_event_t *event);
+static void wifi_init(void);
+static void print_wakeup_reason(esp_sleep_wakeup_cause_t wakeup_reason);
+static void init_logs();
+static void deep_sleep();
 
-void triggerAutomation(char *automation) {
+static void triggerAutomation(char *automation) {
   char buffer[255];
   memcpy(buffer, "{\"entity_id\": \"automation.", 26);
   // TODO - Check max buffer size
@@ -107,7 +113,7 @@ static void wifi_init(void) {
                       portMAX_DELAY);
 }
 
-esp_err_t _http_event_handle(esp_http_client_event_t *evt) {
+static esp_err_t _http_event_handle(esp_http_client_event_t *evt) {
   switch (evt->event_id) {
   case HTTP_EVENT_ERROR:
     ESP_LOGI(TAG, "HTTP_EVENT_ERROR");
@@ -138,7 +144,7 @@ esp_err_t _http_event_handle(esp_http_client_event_t *evt) {
   return ESP_OK;
 }
 
-void print_wakeup_reason(esp_sleep_wakeup_cause_t wakeup_reason) {
+static void print_wakeup_reason(esp_sleep_wakeup_cause_t wakeup_reason) {
   wakeup_reason = esp_sleep_get_wakeup_cause();
   switch (wakeup_reason) {
   case ESP_SLEEP_WAKEUP_EXT0:
@@ -157,16 +163,16 @@ void print_wakeup_reason(esp_sleep_wakeup_cause_t wakeup_reason) {
     ESP_LOGI("WAKEUP", "ULP");
     break;
   /*
-  case ESP_SLEEP_WAKEUP_GPIO:
-      ESP_LOGI("WAKEUP", "Lightleep - GPIO");
-      break;
-  case ESP_SLEEP_WAKEUP_UART:
-      ESP_LOGI("WAKEUP", "Lightleep - GPIO");
-      break;
-  case ESP_SLEEP_WAKEUP_ALL:
-      ESP_LOGI("WAKEUP", "Lightleep - GPIO");
-      break;
-  */
+case ESP_SLEEP_WAKEUP_GPIO:
+ESP_LOGI("WAKEUP", "Lightleep - GPIO");
+break;
+case ESP_SLEEP_WAKEUP_UART:
+ESP_LOGI("WAKEUP", "Lightleep - GPIO");
+break;
+case ESP_SLEEP_WAKEUP_ALL:
+ESP_LOGI("WAKEUP", "Lightleep - GPIO");
+break;
+*/
   case ESP_SLEEP_WAKEUP_UNDEFINED:
     ESP_LOGI("WAKEUP", "Reset was not caused by exit from deep sleep");
     break;
@@ -176,7 +182,7 @@ void print_wakeup_reason(esp_sleep_wakeup_cause_t wakeup_reason) {
   }
 }
 
-void init_logs() {
+static void init_logs() {
   ESP_LOGI("APP", "Startup..");
   ESP_LOGI("APP", "Free memory: %d bytes", esp_get_free_heap_size());
   ESP_LOGI("APP", "IDF version: %s", esp_get_idf_version());
@@ -188,7 +194,7 @@ void init_logs() {
   esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
 }
 
-void deep_sleep() {
+static void deep_sleep() {
   // Setup ext GPIO wakeup
   if (rtc_gpio_pulldown_en(GPIO_WAKE_UP) != ESP_OK) {
     ESP_LOGE(TAG, "Can not set GPIO_WAKE_UP");
@@ -224,4 +230,6 @@ void app_main() {
       vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
   }
+
+  deep_sleep();
 }
